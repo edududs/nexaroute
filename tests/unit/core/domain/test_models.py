@@ -36,6 +36,10 @@ def test_job_envelope_uses_event_correlation() -> None:
     [
         (lambda dt: InboundEvent(name="message.received", source="test", payload={}, occurred_at=dt), "occurred_at"),
         (
+            lambda dt: OutboundCommand(name="notify", target="discord", payload={}, created_at=dt),
+            "created_at",
+        ),
+        (
             lambda dt: JobEnvelope(
                 event=InboundEvent(name="message.received", source="test", payload={}),
                 correlation_id="corr-1",
@@ -60,6 +64,10 @@ def test_models_reject_naive_datetimes(factory: Callable[[datetime], object], fi
     ("factory", "field_name"),
     [
         (lambda dt: InboundEvent(name="message.received", source="test", payload={}, occurred_at=dt), "occurred_at"),
+        (
+            lambda dt: OutboundCommand(name="notify", target="discord", payload={}, created_at=dt),
+            "created_at",
+        ),
         (
             lambda dt: JobEnvelope(
                 event=InboundEvent(name="message.received", source="test", payload={}),
@@ -135,6 +143,71 @@ def test_value_objects_expose_immutable_collection_shapes() -> None:
 
     with pytest.raises(AttributeError):
         result.commands.append(command)
+
+
+def test_value_objects_deep_freeze_nested_mappings_and_sequences() -> None:
+    event = InboundEvent(
+        name="message.received",
+        source="test",
+        payload={"nested": {"items": ["first", {"key": "value"}]}},
+        metadata={"flags": ["a", "b"]},
+    )
+    command = OutboundCommand(
+        name="notify",
+        target="discord",
+        payload={"nested": {"items": ["first", {"key": "value"}]}},
+        metadata={"channels": ["ops"]},
+    )
+    job = JobEnvelope(
+        event=event,
+        correlation_id=event.correlation_id,
+        metadata={"routes": [{"name": "default"}]},
+    )
+    state_write = StateWrite(namespace="messages", key="1", value={"nested": {"saved": [True]}})
+    cache_write = CacheWrite(key="latest", value={"nested": [{"id": "1"}]}, ttl=60)
+    log = LogEntry(level="info", message="processed", context={"nested": {"events": ["message.received"]}})
+    context = ExecutionContext(
+        event=event,
+        correlation_id=event.correlation_id,
+        state_store=object(),
+        cache=object(),
+        logger=object(),
+        metadata={"nested": {"tenants": ["acme"]}},
+    )
+
+    assert isinstance(event.payload["nested"], Mapping)
+    assert isinstance(event.payload["nested"]["items"], tuple)
+    assert isinstance(event.payload["nested"]["items"][1], Mapping)
+    assert isinstance(command.payload["nested"]["items"], tuple)
+    assert isinstance(command.metadata["channels"], tuple)
+    assert isinstance(job.metadata["routes"], tuple)
+    assert isinstance(job.metadata["routes"][0], Mapping)
+    assert isinstance(state_write.value["nested"]["saved"], tuple)
+    assert isinstance(cache_write.value["nested"], tuple)
+    assert isinstance(cache_write.value["nested"][0], Mapping)
+    assert isinstance(log.context["nested"]["events"], tuple)
+    assert isinstance(context.metadata["nested"]["tenants"], tuple)
+
+    with pytest.raises(TypeError):
+        event.payload["nested"]["items"][1]["key"] = "changed"
+
+    with pytest.raises(TypeError):
+        command.payload["nested"]["items"][1]["key"] = "changed"
+
+    with pytest.raises(TypeError):
+        job.metadata["routes"][0]["name"] = "priority"
+
+    with pytest.raises(TypeError):
+        state_write.value["nested"]["saved"][0] = False
+
+    with pytest.raises(TypeError):
+        cache_write.value["nested"][0]["id"] = "2"
+
+    with pytest.raises(TypeError):
+        log.context["nested"]["events"][0] = "other"
+
+    with pytest.raises(TypeError):
+        context.metadata["nested"]["tenants"][0] = "other"
 
 
 def test_handler_result_defaults_to_empty_effects() -> None:

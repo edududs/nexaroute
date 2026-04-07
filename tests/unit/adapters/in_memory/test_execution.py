@@ -25,6 +25,14 @@ def test_execution_strategy_rejects_non_positive_concurrency(concurrency: int) -
         InMemoryExecutionAdapter(concurrency=concurrency)
 
 
+@pytest.mark.parametrize("poll_interval", [0, -0.01])
+def test_execution_strategy_rejects_non_positive_poll_interval(
+    poll_interval: float,
+) -> None:
+    with pytest.raises(ValueError, match="poll_interval must be greater than 0"):
+        InMemoryExecutionAdapter(poll_interval=poll_interval)
+
+
 @pytest.mark.asyncio
 async def test_execution_strategy_processes_queued_jobs() -> None:
     queue = InMemoryQueueAdapter()

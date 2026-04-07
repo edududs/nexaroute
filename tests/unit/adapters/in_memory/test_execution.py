@@ -19,6 +19,21 @@ class RecordingProcessor(ExecutionProcessorPort):
         self.seen.set()
 
 
+class ObservableQueue(InMemoryQueueAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.consume_started = asyncio.Event()
+
+    async def consume(self) -> JobEnvelope:
+        self.consume_started.set()
+        return await super().consume()
+
+
+async def wait_for_stop_signal(strategy: InMemoryExecutionAdapter) -> None:
+    while not strategy._stop_event.is_set():
+        await asyncio.sleep(0)
+
+
 @pytest.mark.parametrize("concurrency", [0, -1])
 def test_execution_strategy_rejects_non_positive_concurrency(concurrency: int) -> None:
     with pytest.raises(ValueError, match="concurrency must be at least 1"):
@@ -46,3 +61,21 @@ async def test_execution_strategy_processes_queued_jobs() -> None:
     await strategy.stop()
 
     assert processor.processed == [job.job_id]
+
+
+@pytest.mark.asyncio
+async def test_execution_strategy_does_not_process_jobs_published_after_stop_begins() -> None:
+    queue = ObservableQueue()
+    processor = RecordingProcessor()
+    strategy = InMemoryExecutionAdapter(concurrency=1, poll_interval=0.5)
+    job = JobEnvelope.from_event(InboundEvent(name="message.received", source="test", payload={}))
+
+    await strategy.start(queue, processor)
+    await asyncio.wait_for(queue.consume_started.wait(), timeout=1)
+
+    stop_task = asyncio.create_task(strategy.stop())
+    await asyncio.wait_for(wait_for_stop_signal(strategy), timeout=1)
+    await queue.publish(job)
+    await asyncio.wait_for(stop_task, timeout=1)
+
+    assert processor.processed == []

@@ -44,6 +44,10 @@ class InMemoryExecutionAdapter(ExecutionStrategyPort):
             except TimeoutError:
                 continue
 
+            if self._stop_event.is_set():
+                await queue.nack(job, reason="execution strategy stopping")
+                continue
+
             try:
                 await processor.process(job)
             except Exception as error:

@@ -1,7 +1,8 @@
-from collections.abc import Mapping
-from datetime import UTC, datetime
+from collections.abc import Callable, Mapping
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
+from pydantic import ValidationError
 
 from nexaroute.core.domain.commands import OutboundCommand
 from nexaroute.core.domain.context import ExecutionContext
@@ -28,6 +29,69 @@ def test_job_envelope_uses_event_correlation() -> None:
     assert job.correlation_id == event.correlation_id
     assert job.causation_id == event.id
     assert job.attempt == 1
+
+
+@pytest.mark.parametrize(
+    ("factory", "field_name"),
+    [
+        (lambda dt: InboundEvent(name="message.received", source="test", payload={}, occurred_at=dt), "occurred_at"),
+        (
+            lambda dt: JobEnvelope(
+                event=InboundEvent(name="message.received", source="test", payload={}),
+                correlation_id="corr-1",
+                scheduled_at=dt,
+            ),
+            "scheduled_at",
+        ),
+        (lambda dt: LogEntry(level="info", message="processed", timestamp=dt), "timestamp"),
+    ],
+)
+def test_models_reject_naive_datetimes(factory: Callable[[datetime], object], field_name: str) -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        factory(datetime(2026, 1, 2, 3, 4, 5))
+
+    errors = exc_info.value.errors()
+
+    assert errors[0]["loc"] == (field_name,)
+    assert errors[0]["type"] == "timezone_aware"
+
+
+@pytest.mark.parametrize(
+    ("factory", "field_name"),
+    [
+        (lambda dt: InboundEvent(name="message.received", source="test", payload={}, occurred_at=dt), "occurred_at"),
+        (
+            lambda dt: JobEnvelope(
+                event=InboundEvent(name="message.received", source="test", payload={}),
+                correlation_id="corr-1",
+                scheduled_at=dt,
+            ),
+            "scheduled_at",
+        ),
+        (lambda dt: LogEntry(level="info", message="processed", timestamp=dt), "timestamp"),
+    ],
+)
+def test_models_normalize_aware_datetimes_to_utc(factory: Callable[[datetime], object], field_name: str) -> None:
+    source_dt = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+
+    model = factory(source_dt)
+    normalized = getattr(model, field_name)
+
+    assert normalized.tzinfo is UTC
+    assert normalized == datetime(2026, 1, 1, 21, 34, 5, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("attempt", [0, -1])
+def test_job_envelope_rejects_non_positive_attempts(attempt: int) -> None:
+    event = InboundEvent(name="message.received", source="test", payload={})
+
+    with pytest.raises(ValidationError) as exc_info:
+        JobEnvelope(event=event, correlation_id=event.correlation_id, attempt=attempt)
+
+    errors = exc_info.value.errors()
+
+    assert errors[0]["loc"] == ("attempt",)
+    assert errors[0]["type"] == "greater_than_equal"
 
 
 def test_value_objects_expose_immutable_collection_shapes() -> None:

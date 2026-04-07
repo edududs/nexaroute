@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 from nexaroute.core.domain.commands import OutboundCommand
-from nexaroute.core.domain.events import freeze_mapping
+from nexaroute.core.domain.events import freeze_mapping, normalize_utc_datetime
 
 LogLevel = Literal["debug", "info", "warning", "error"]
 
@@ -39,8 +39,13 @@ class LogEntry(BaseModel):
 
     level: LogLevel
     message: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     context: Mapping[str, Any] = Field(default_factory=dict)
+
+    @field_validator("timestamp", mode="after")
+    @classmethod
+    def ensure_timestamp_is_utc(cls, value: AwareDatetime) -> datetime:
+        return normalize_utc_datetime(value)
 
     def model_post_init(self, __context: Any) -> None:
         object.__setattr__(self, "context", freeze_mapping(self.context))

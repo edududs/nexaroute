@@ -5,9 +5,9 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
-from nexaroute.core.domain.events import InboundEvent, freeze_mapping
+from nexaroute.core.domain.events import InboundEvent, freeze_mapping, normalize_utc_datetime
 
 
 class JobEnvelope(BaseModel):
@@ -19,9 +19,14 @@ class JobEnvelope(BaseModel):
     routing_key: str | None = None
     correlation_id: str
     causation_id: str | None = None
-    attempt: int = 1
-    scheduled_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    attempt: int = Field(default=1, ge=1)
+    scheduled_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: Mapping[str, Any] = Field(default_factory=dict)
+
+    @field_validator("scheduled_at", mode="after")
+    @classmethod
+    def ensure_scheduled_at_is_utc(cls, value: AwareDatetime) -> datetime:
+        return normalize_utc_datetime(value)
 
     def model_post_init(self, __context: Any) -> None:
         object.__setattr__(self, "metadata", freeze_mapping(self.metadata))

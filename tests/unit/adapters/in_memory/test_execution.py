@@ -19,6 +19,12 @@ class RecordingProcessor(ExecutionProcessorPort):
         self.seen.set()
 
 
+@pytest.mark.parametrize("concurrency", [0, -1])
+def test_execution_strategy_rejects_non_positive_concurrency(concurrency: int) -> None:
+    with pytest.raises(ValueError, match="concurrency must be at least 1"):
+        InMemoryExecutionAdapter(concurrency=concurrency)
+
+
 @pytest.mark.asyncio
 async def test_execution_strategy_processes_queued_jobs() -> None:
     queue = InMemoryQueueAdapter()

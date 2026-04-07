@@ -8,6 +8,9 @@ from nexaroute.core.ports.queue import QueuePort
 
 class InMemoryExecutionAdapter(ExecutionStrategyPort):
     def __init__(self, concurrency: int = 1, poll_interval: float = 0.05) -> None:
+        if concurrency < 1:
+            raise ValueError("concurrency must be at least 1")
+
         self._concurrency = concurrency
         self._poll_interval = poll_interval
         self._stop_event = asyncio.Event()

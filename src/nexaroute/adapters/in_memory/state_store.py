@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from nexaroute.core.ports.state_store import StateStorePort
@@ -10,10 +11,11 @@ class InMemoryStateStoreAdapter(StateStorePort):
         self._data: dict[str, dict[str, dict[str, Any]]] = {}
 
     async def load(self, namespace: str, key: str) -> dict[str, Any] | None:
-        return self._data.get(namespace, {}).get(key)
+        value = self._data.get(namespace, {}).get(key)
+        return deepcopy(value) if value is not None else None
 
     async def save(self, namespace: str, key: str, value: dict[str, Any]) -> None:
-        self._data.setdefault(namespace, {})[key] = value
+        self._data.setdefault(namespace, {})[key] = deepcopy(value)
 
     async def delete(self, namespace: str, key: str) -> None:
         namespace_data = self._data.get(namespace)

@@ -1,4 +1,7 @@
+from io import StringIO
+
 import pytest
+from rich.console import Console
 
 from nexaroute.adapters.in_memory.cache import InMemoryCacheAdapter
 from nexaroute.adapters.in_memory.queue import InMemoryQueueAdapter
@@ -43,8 +46,78 @@ async def test_in_memory_state_store_round_trip() -> None:
 
 
 @pytest.mark.asyncio
+async def test_in_memory_state_store_save_isolates_nested_mutation() -> None:
+    store = InMemoryStateStoreAdapter()
+    payload = {"text": "hello", "meta": {"tags": ["initial"]}}
+
+    await store.save("messages", "1", payload)
+    payload["meta"]["tags"].append("mutated")
+
+    assert await store.load("messages", "1") == {
+        "text": "hello",
+        "meta": {"tags": ["initial"]},
+    }
+
+
+@pytest.mark.asyncio
+async def test_in_memory_state_store_load_returns_deep_copy() -> None:
+    store = InMemoryStateStoreAdapter()
+
+    await store.save("messages", "1", {"text": "hello", "meta": {"tags": ["initial"]}})
+    loaded = await store.load("messages", "1")
+    assert loaded is not None
+
+    loaded["meta"]["tags"].append("mutated")
+
+    assert await store.load("messages", "1") == {
+        "text": "hello",
+        "meta": {"tags": ["initial"]},
+    }
+
+
+@pytest.mark.asyncio
 async def test_rich_logger_methods_do_not_raise() -> None:
     logger = RichLoggerAdapter()
 
     await logger.info("runtime started", component="test")
     await logger.error("runtime failed", component="test")
+
+
+@pytest.mark.asyncio
+async def test_rich_logger_exception_includes_active_traceback() -> None:
+    output = StringIO()
+    logger = RichLoggerAdapter(console=Console(file=output, stderr=True, force_terminal=False))
+
+    try:
+        raise ValueError("boom")
+    except ValueError:
+        await logger.exception("runtime failed", component="test")
+
+    rendered = output.getvalue()
+
+    assert "EXCEPTION" in rendered
+    assert "runtime failed" in rendered
+    assert "ValueError: boom" in rendered
+    assert "Traceback" in rendered
+    assert "component" in rendered
+    assert "test" in rendered
+    assert "test_rich_logger_exception_includes_active_traceback" in rendered
+
+
+@pytest.mark.asyncio
+async def test_rich_logger_exception_outside_exception_context_does_not_raise() -> None:
+    output = StringIO()
+    logger = RichLoggerAdapter(console=Console(file=output, stderr=True, force_terminal=False))
+
+    await logger.exception("runtime failed", component="test")
+
+    rendered = output.getvalue()
+
+    assert "EXCEPTION" in rendered
+    assert "runtime failed" in rendered
+    assert "component" in rendered
+    assert "test" in rendered
+    assert "Traceback" not in rendered
+    assert "NoneType: None" not in rendered
+    assert "ValueError: boom" not in rendered
+    assert "test_rich_logger_exception_includes_active_traceback" not in rendered

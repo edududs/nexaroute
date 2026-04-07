@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 from rich.console import Console
@@ -35,3 +36,6 @@ class RichLoggerAdapter(LoggerPort):
         self._console.log(f"[bold red]EXCEPTION[/bold red] {message}", log_locals=False)
         if context:
             self._console.log(context, log_locals=False)
+
+        if sys.exc_info()[0] is not None:
+            self._console.print_exception()

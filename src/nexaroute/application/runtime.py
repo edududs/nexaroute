@@ -57,7 +57,7 @@ class DispatcherRuntime:
         await self.logger.info("runtime started", trigger_count=len(self.triggers))
 
     async def stop(self) -> None:
-        if not self._started and not self._execution_started:
+        if not self._started and not self._execution_started and not self._started_triggers:
             return
 
         try:
@@ -69,14 +69,18 @@ class DispatcherRuntime:
 
     async def _stop_started_components(self) -> None:
         first_error: Exception | None = None
+        failed_triggers: list[BaseTrigger] = []
 
         while self._started_triggers:
             trigger = self._started_triggers.pop()
             try:
                 await trigger.stop()
             except Exception as exc:
+                failed_triggers.append(trigger)
                 if first_error is None:
                     first_error = exc
+
+        self._started_triggers = list(reversed(failed_triggers))
 
         if self._execution_started:
             self._execution_started = False

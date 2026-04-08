@@ -119,6 +119,23 @@ class FailingStopTrigger(BaseTrigger):
         raise RuntimeError("trigger stop failed")
 
 
+class RetryableStopTrigger(BaseTrigger):
+    def __init__(self) -> None:
+        self.started = False
+        self.stop_calls = 0
+        self.stopped = False
+
+    async def start(self, publisher: EventPublisher) -> None:
+        _ = publisher
+        self.started = True
+
+    async def stop(self) -> None:
+        self.stop_calls += 1
+        if self.stop_calls == 1:
+            raise RuntimeError("trigger stop failed")
+        self.stopped = True
+
+
 @pytest.mark.asyncio
 async def test_runtime_cleans_up_execution_when_trigger_start_fails() -> None:
     execution = RecordingExecution()
@@ -157,6 +174,34 @@ async def test_runtime_stops_execution_even_when_trigger_stop_fails() -> None:
     assert trigger.started is True
     assert trigger.stop_calls == 1
     assert execution.start_calls == 1
+    assert execution.stop_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_runtime_retries_failed_trigger_stop_on_later_stop_call() -> None:
+    execution = RecordingExecution()
+    trigger = RetryableStopTrigger()
+    runtime = DispatcherRuntime(
+        queue=StubQueue(),
+        execution=execution,
+        orchestrator=StubProcessor(),
+        triggers=[trigger],
+        logger=StubLogger(),
+    )
+
+    await runtime.start()
+
+    with pytest.raises(RuntimeError, match="trigger stop failed"):
+        await runtime.stop()
+
+    assert trigger.stop_calls == 1
+    assert trigger.stopped is False
+    assert execution.stop_calls == 1
+
+    await runtime.stop()
+
+    assert trigger.stop_calls == 2
+    assert trigger.stopped is True
     assert execution.stop_calls == 1
 
 

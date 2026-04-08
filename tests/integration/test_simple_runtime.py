@@ -1,4 +1,8 @@
 import asyncio
+import os
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -171,3 +175,20 @@ async def test_simple_runtime_processes_one_triggered_event() -> None:
     await runtime.stop()
 
     assert await runtime.orchestrator.state_store.load("messages", "1") == {"text": "hello"}
+
+
+def test_root_main_runs_from_source_checkout_without_pytest_pythonpath() -> None:
+    project_root = Path(__file__).resolve().parents[2]
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+
+    result = subprocess.run(
+        [sys.executable, "main.py"],
+        cwd=project_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr

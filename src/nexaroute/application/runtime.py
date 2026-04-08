@@ -83,12 +83,13 @@ class DispatcherRuntime:
         self._started_triggers = list(reversed(failed_triggers))
 
         if self._execution_started:
-            self._execution_started = False
             try:
                 await self.execution.stop()
             except Exception as exc:
                 if first_error is None:
                     first_error = exc
+            else:
+                self._execution_started = False
 
         self._started = False
 

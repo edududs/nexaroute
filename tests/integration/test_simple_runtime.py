@@ -96,6 +96,21 @@ class RecordingExecution(ExecutionStrategyPort):
         self.stop_calls += 1
 
 
+class RetryableFailingExecution(ExecutionStrategyPort):
+    def __init__(self) -> None:
+        self.start_calls = 0
+        self.stop_calls = 0
+
+    async def start(self, queue: QueuePort, processor: ExecutionProcessorPort) -> None:
+        _ = (queue, processor)
+        self.start_calls += 1
+
+    async def stop(self) -> None:
+        self.stop_calls += 1
+        if self.stop_calls == 1:
+            raise RuntimeError("execution stop failed")
+
+
 class FailingStartTrigger(BaseTrigger):
     async def start(self, publisher: EventPublisher) -> None:
         _ = publisher
@@ -203,6 +218,30 @@ async def test_runtime_retries_failed_trigger_stop_on_later_stop_call() -> None:
     assert trigger.stop_calls == 2
     assert trigger.stopped is True
     assert execution.stop_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_runtime_retries_failed_execution_stop_on_later_stop_call() -> None:
+    execution = RetryableFailingExecution()
+    runtime = DispatcherRuntime(
+        queue=StubQueue(),
+        execution=execution,
+        orchestrator=StubProcessor(),
+        triggers=[],
+        logger=StubLogger(),
+    )
+
+    await runtime.start()
+
+    with pytest.raises(RuntimeError, match="execution stop failed"):
+        await runtime.stop()
+
+    assert execution.start_calls == 1
+    assert execution.stop_calls == 1
+
+    await runtime.stop()
+
+    assert execution.stop_calls == 2
 
 
 @pytest.mark.asyncio

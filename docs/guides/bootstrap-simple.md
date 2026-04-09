@@ -5,11 +5,19 @@ Use `create_simple_runtime()` to compose the MVP runtime with in-memory adapters
 ```python
 import asyncio
 
+from nexaroute.application.bootstrap import create_simple_runtime
+from nexaroute.core.domain.context import ExecutionContext
+from nexaroute.core.domain.results import HandlerResult
+
+
+async def handle_message(_: ExecutionContext) -> HandlerResult:
+    return HandlerResult()
+
 
 async def main() -> None:
     runtime = create_simple_runtime(
         triggers=[],
-        handlers={"message.received": handler},
+        handlers={"message.received": handle_message},
         concurrency=4,
     )
 

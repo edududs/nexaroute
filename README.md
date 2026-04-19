@@ -35,4 +35,15 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-See `docs/architecture/overview.md` and `docs/guides/bootstrap-simple.md` for details.
+## Documentation
+
+Full documentation lives in `docs/README.md`, with tracks from introductory to advanced:
+
+- Getting started: installation, quickstart, first handler
+- Concepts: business value and technical mental model
+- Architecture and reference: internals, ports, domain contracts
+- Guides: handler patterns and Neonize integration
+- Operations: production checklist and troubleshooting
+- FAQ
+
+Primary entrypoint: `docs/README.md`.

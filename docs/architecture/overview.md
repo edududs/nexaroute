@@ -13,3 +13,9 @@
 ## Why this shape
 
 The runtime keeps ingress responsive while the execution strategy controls concurrency. The core remains infrastructure-agnostic.
+
+## Continue Reading
+
+- `system-design.md` for deeper runtime responsibilities and guarantees
+- `../reference/domain-models.md` for model-level contracts
+- `../reference/ports-and-adapters.md` for integration boundaries

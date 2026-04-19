@@ -33,3 +33,9 @@ asyncio.run(main())
 ```
 
 After startup, the runtime starts triggers, dispatches `InboundEvent` instances into `JobEnvelope` items, and processes them in-process with `asyncio.TaskGroup` until `stop()` is awaited.
+
+See also:
+
+- `../getting-started/first-handler.md`
+- `../guides/handler-patterns.md`
+- `../operations/production-checklist.md`
